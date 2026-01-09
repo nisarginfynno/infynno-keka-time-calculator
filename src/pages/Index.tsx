@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Calculator, Timer, CheckCircle2, AlertCircle } from "lucide-react";
+import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee } from "lucide-react";
 
 const TARGET_HOURS = 8;
 const TARGET_MINUTES = 15;
@@ -44,6 +44,12 @@ const formatTime = (date: Date): string => {
   });
 };
 
+interface BreakInfo {
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+}
+
 interface CalculationResult {
   validEntries: string[];
   invalidEntries: string[];
@@ -52,6 +58,8 @@ interface CalculationResult {
   completionTime: Date | null;
   isComplete: boolean;
   isCurrentlyIn: boolean;
+  totalBreakMinutes: number;
+  breaks: BreakInfo[];
 }
 
 const Index = () => {
@@ -91,6 +99,23 @@ const Index = () => {
       }
     }
 
+    // Calculate breaks: gap between OUT and next IN
+    const breaks: BreakInfo[] = [];
+    let totalBreakMs = 0;
+    for (let i = 1; i < parsedTimes.length - 1; i += 2) {
+      const outTime = parsedTimes[i];
+      const nextInTime = parsedTimes[i + 1];
+      if (outTime && nextInTime) {
+        const breakMs = nextInTime.getTime() - outTime.getTime();
+        totalBreakMs += breakMs;
+        breaks.push({
+          startTime: formatTime(outTime),
+          endTime: formatTime(nextInTime),
+          durationMinutes: breakMs / 1000 / 60,
+        });
+      }
+    }
+
     const isCurrentlyIn = parsedTimes.length % 2 === 1;
     if (isCurrentlyIn) {
       const lastIn = parsedTimes[parsedTimes.length - 1];
@@ -100,6 +125,7 @@ const Index = () => {
     const totalWorkedMinutes = totalWorkedMs / 1000 / 60;
     const remainingMinutes = TARGET_TOTAL_MINUTES - totalWorkedMinutes;
     const isComplete = remainingMinutes <= 0;
+    const totalBreakMinutes = totalBreakMs / 1000 / 60;
 
     let completionTime: Date | null = null;
     if (!isComplete && isCurrentlyIn) {
@@ -114,6 +140,8 @@ const Index = () => {
       completionTime,
       isComplete,
       isCurrentlyIn,
+      totalBreakMinutes,
+      breaks,
     });
   };
 
@@ -235,6 +263,44 @@ const Index = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Break Time Section */}
+            <Card className="bg-card shadow-md border-l-4 border-l-accent/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Coffee className="w-5 h-5 text-accent" />
+                  Break Time
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">Total Break:</span>
+                  <span className="font-mono text-xl font-bold text-foreground">
+                    {formatDuration(result.totalBreakMinutes)}
+                  </span>
+                </div>
+                {result.breaks.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Individual Breaks</p>
+                    <div className="space-y-1">
+                      {result.breaks.map((brk, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-sm bg-secondary/30 rounded px-3 py-2">
+                          <span className="font-mono text-muted-foreground">
+                            {brk.startTime} → {brk.endTime}
+                          </span>
+                          <span className="font-mono font-semibold text-foreground">
+                            {formatDuration(brk.durationMinutes)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.breaks.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic">No breaks detected</p>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Parsed Entries Info */}
             <Card className="bg-card shadow-md">
