@@ -4,7 +4,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee, Sun, Sunset, LogOut } from "lucide-react";
+import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee, Sun, Sunset, LogOut, Save } from "lucide-react";
+
+const COOKIE_NAME = "punchLogData";
+const REMEMBER_PREFERENCE_KEY = "rememberPunchLog";
+
+const setCookie = (name: string, value: string, expiresAt: Date) => {
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expiresAt.toUTCString()};path=/`;
+};
+
+const getCookie = (name: string): string | null => {
+  const cookies = document.cookie.split(";");
+  for (const cookie of cookies) {
+    const [cookieName, cookieValue] = cookie.trim().split("=");
+    if (cookieName === name) {
+      return decodeURIComponent(cookieValue);
+    }
+  }
+  return null;
+};
+
+const deleteCookie = (name: string) => {
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+};
+
+const getMidnight = (): Date => {
+  const midnight = new Date();
+  midnight.setHours(24, 0, 0, 0);
+  return midnight;
+};
 
 const FULL_DAY_HOURS = 8;
 const FULL_DAY_MINUTES = 15;
@@ -85,6 +113,38 @@ const Index = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [dayType, setDayType] = useState<DayType>("full");
+  const [rememberLog, setRememberLog] = useState<boolean>(() => {
+    return localStorage.getItem(REMEMBER_PREFERENCE_KEY) === "true";
+  });
+
+  // Load saved punch log from cookie on mount
+  useEffect(() => {
+    if (rememberLog) {
+      const savedLog = getCookie(COOKIE_NAME);
+      if (savedLog) {
+        setPunchLog(savedLog);
+      }
+    }
+  }, []);
+
+  // Save punch log to cookie when it changes (if remember is on)
+  useEffect(() => {
+    if (rememberLog && punchLog.trim()) {
+      setCookie(COOKIE_NAME, punchLog, getMidnight());
+    }
+  }, [punchLog, rememberLog]);
+
+  // Handle remember toggle change
+  const handleRememberToggle = (checked: boolean) => {
+    setRememberLog(checked);
+    localStorage.setItem(REMEMBER_PREFERENCE_KEY, String(checked));
+    
+    if (checked && punchLog.trim()) {
+      setCookie(COOKIE_NAME, punchLog, getMidnight());
+    } else if (!checked) {
+      deleteCookie(COOKIE_NAME);
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -256,10 +316,28 @@ const Index = () => {
         {/* Input Section */}
         <Card className="bg-card shadow-lg">
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-accent" />
-              Punch Log Input
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-accent" />
+                Punch Log Input
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Save className="w-4 h-4 text-muted-foreground" />
+                <Label htmlFor="remember-log" className="text-xs text-muted-foreground cursor-pointer">
+                  Remember
+                </Label>
+                <Switch
+                  id="remember-log"
+                  checked={rememberLog}
+                  onCheckedChange={handleRememberToggle}
+                />
+              </div>
+            </div>
+            {rememberLog && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Log saved until midnight
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <Textarea
