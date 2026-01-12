@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee, Sun, Sunset } from "lucide-react";
+import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee, Sun, Sunset, LogOut } from "lucide-react";
 
 const FULL_DAY_HOURS = 8;
 const FULL_DAY_MINUTES = 15;
@@ -13,6 +13,10 @@ const FULL_DAY_TOTAL_MINUTES = FULL_DAY_HOURS * 60 + FULL_DAY_MINUTES;
 const HALF_DAY_HOURS = 4;
 const HALF_DAY_MINUTES = 30;
 const HALF_DAY_TOTAL_MINUTES = HALF_DAY_HOURS * 60 + HALF_DAY_MINUTES;
+
+const EARLY_LEAVE_HOURS = 7;
+const EARLY_LEAVE_MINUTES = 0;
+const EARLY_LEAVE_TOTAL_MINUTES = EARLY_LEAVE_HOURS * 60 + EARLY_LEAVE_MINUTES;
 
 type DayType = "full" | "half";
 type HalfType = "first" | "second" | null;
@@ -71,6 +75,9 @@ interface CalculationResult {
   breaks: BreakInfo[];
   targetMinutes: number;
   halfType: HalfType;
+  earlyLeaveRemainingMinutes: number;
+  earlyLeaveTime: Date | null;
+  canEarlyLeaveNow: boolean;
 }
 
 const Index = () => {
@@ -157,6 +164,17 @@ const Index = () => {
       completionTime = new Date(currentTime.getTime() + remainingMinutes * 60 * 1000);
     }
 
+    // Early leave calculations (only for full day)
+    const earlyLeaveRemainingMinutes = dayType === "full" 
+      ? EARLY_LEAVE_TOTAL_MINUTES - totalWorkedMinutes 
+      : 0;
+    const canEarlyLeaveNow = dayType === "full" && earlyLeaveRemainingMinutes <= 0;
+    
+    let earlyLeaveTime: Date | null = null;
+    if (dayType === "full" && !canEarlyLeaveNow && isCurrentlyIn) {
+      earlyLeaveTime = new Date(currentTime.getTime() + earlyLeaveRemainingMinutes * 60 * 1000);
+    }
+
     setResult({
       validEntries,
       invalidEntries,
@@ -169,6 +187,9 @@ const Index = () => {
       breaks,
       targetMinutes,
       halfType,
+      earlyLeaveRemainingMinutes,
+      earlyLeaveTime,
+      canEarlyLeaveNow,
     });
   };
 
@@ -366,6 +387,67 @@ const Index = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Early Leave Section - Only for Full Day */}
+            {dayType === "full" && (
+              <Card className="bg-card shadow-md border-l-4 border-l-muted-foreground/40">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <LogOut className="w-5 h-5 text-muted-foreground" />
+                    Leave Times
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Normal Leave */}
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Normal Leave (8:15 hrs)
+                      </p>
+                      {result.isComplete ? (
+                        <p className="font-mono text-lg font-semibold text-success">
+                          ✓ Complete
+                        </p>
+                      ) : result.completionTime ? (
+                        <p className="font-mono text-lg font-semibold text-foreground">
+                          {formatTime(result.completionTime)}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">Clock in to estimate</p>
+                      )}
+                      {!result.isComplete && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatDuration(result.remainingMinutes)} remaining
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Early Leave */}
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Early Leave (7:00 hrs min)
+                      </p>
+                      {result.canEarlyLeaveNow ? (
+                        <p className="font-mono text-lg font-semibold text-accent">
+                          You can leave now
+                        </p>
+                      ) : result.earlyLeaveTime ? (
+                        <p className="font-mono text-lg font-semibold text-foreground">
+                          {formatTime(result.earlyLeaveTime)}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">Clock in to estimate</p>
+                      )}
+                      {!result.canEarlyLeaveNow && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatDuration(result.earlyLeaveRemainingMinutes)} remaining
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Parsed Entries Info */}
             <Card className="bg-card shadow-md">
