@@ -117,12 +117,14 @@ const Index = () => {
     return localStorage.getItem(REMEMBER_PREFERENCE_KEY) === "true";
   });
 
-  // Load saved punch log from cookie on mount
+  // Load saved punch log from cookie on mount and auto-calculate
   useEffect(() => {
     if (rememberLog) {
       const savedLog = getCookie(COOKIE_NAME);
       if (savedLog) {
         setPunchLog(savedLog);
+        // Defer calculation to after state is set
+        setTimeout(() => calculate(savedLog), 0);
       }
     }
   }, []);
@@ -153,13 +155,24 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Auto-calculate when dayType changes
+  useEffect(() => {
+    if (punchLog.trim()) {
+      calculate(punchLog);
+    }
+  }, [dayType]);
+
   const detectHalfType = (firstPunchTime: Date): HalfType => {
     const hours = firstPunchTime.getHours();
     return hours < 12 ? "first" : "second";
   };
 
-  const calculate = () => {
-    const lines = punchLog.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const calculate = (logText: string = punchLog) => {
+    if (!logText.trim()) {
+      setResult(null);
+      return;
+    }
+    const lines = logText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
     const validEntries: string[] = [];
     const invalidEntries: string[] = [];
     const parsedTimes: Date[] = [];
@@ -306,7 +319,10 @@ const Index = () => {
                 <Switch
                   id="day-type"
                   checked={dayType === "half"}
-                  onCheckedChange={(checked) => setDayType(checked ? "half" : "full")}
+                  onCheckedChange={(checked) => {
+                    const newDayType = checked ? "half" : "full";
+                    setDayType(newDayType);
+                  }}
                 />
               </div>
             </div>
@@ -343,11 +359,15 @@ const Index = () => {
             <Textarea
               placeholder={`Paste your punch times here (one per line):\n\n10:38:59 AM\n1:00:00 PM\n1:21:33 PM\n6:00:00 PM\nMISSING`}
               value={punchLog}
-              onChange={(e) => setPunchLog(e.target.value)}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setPunchLog(newValue);
+                calculate(newValue);
+              }}
               className="min-h-[180px] font-mono text-sm bg-secondary/50 border-border focus:border-accent focus:ring-accent"
             />
             <Button
-              onClick={calculate}
+              onClick={() => calculate()}
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6"
             >
               Calculate Working Hours
