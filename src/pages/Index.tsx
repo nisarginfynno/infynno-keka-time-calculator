@@ -2,11 +2,20 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Clock, Calculator, Timer, CheckCircle2, AlertCircle, Coffee, Sun, Sunset } from "lucide-react";
 
-const TARGET_HOURS = 8;
-const TARGET_MINUTES = 15;
-const TARGET_TOTAL_MINUTES = TARGET_HOURS * 60 + TARGET_MINUTES;
+const FULL_DAY_HOURS = 8;
+const FULL_DAY_MINUTES = 15;
+const FULL_DAY_TOTAL_MINUTES = FULL_DAY_HOURS * 60 + FULL_DAY_MINUTES;
+
+const HALF_DAY_HOURS = 4;
+const HALF_DAY_MINUTES = 30;
+const HALF_DAY_TOTAL_MINUTES = HALF_DAY_HOURS * 60 + HALF_DAY_MINUTES;
+
+type DayType = "full" | "half";
+type HalfType = "first" | "second" | null;
 
 const parseTime = (timeStr: string): Date | null => {
   const regex = /^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i;
@@ -60,12 +69,15 @@ interface CalculationResult {
   isCurrentlyIn: boolean;
   totalBreakMinutes: number;
   breaks: BreakInfo[];
+  targetMinutes: number;
+  halfType: HalfType;
 }
 
 const Index = () => {
   const [punchLog, setPunchLog] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [result, setResult] = useState<CalculationResult | null>(null);
+  const [dayType, setDayType] = useState<DayType>("full");
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -73,6 +85,11 @@ const Index = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const detectHalfType = (firstPunchTime: Date): HalfType => {
+    const hours = firstPunchTime.getHours();
+    return hours < 12 ? "first" : "second";
+  };
 
   const calculate = () => {
     const lines = punchLog.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
@@ -123,9 +140,17 @@ const Index = () => {
     }
 
     const totalWorkedMinutes = totalWorkedMs / 1000 / 60;
-    const remainingMinutes = TARGET_TOTAL_MINUTES - totalWorkedMinutes;
-    const isComplete = remainingMinutes <= 0;
     const totalBreakMinutes = totalBreakMs / 1000 / 60;
+
+    // Determine target based on day type
+    const targetMinutes = dayType === "full" ? FULL_DAY_TOTAL_MINUTES : HALF_DAY_TOTAL_MINUTES;
+    const remainingMinutes = targetMinutes - totalWorkedMinutes;
+    const isComplete = remainingMinutes <= 0;
+
+    // Detect half type if half day is selected
+    const halfType: HalfType = dayType === "half" && parsedTimes.length > 0 
+      ? detectHalfType(parsedTimes[0]) 
+      : null;
 
     let completionTime: Date | null = null;
     if (!isComplete && isCurrentlyIn) {
@@ -142,6 +167,8 @@ const Index = () => {
       isCurrentlyIn,
       totalBreakMinutes,
       breaks,
+      targetMinutes,
+      halfType,
     });
   };
 
@@ -168,6 +195,39 @@ const Index = () => {
               <span className="font-mono text-xl font-semibold text-foreground">
                 {formatTime(currentTime)}
               </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Day Type Toggle */}
+        <Card className="bg-card shadow-md border-2 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {dayType === "full" ? (
+                  <Sun className="w-5 h-5 text-primary" />
+                ) : (
+                  <Sunset className="w-5 h-5 text-accent" />
+                )}
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {dayType === "full" ? "Full Day" : "Half Day"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Target: {dayType === "full" ? `${FULL_DAY_HOURS}h ${FULL_DAY_MINUTES}m` : `${HALF_DAY_HOURS}h ${HALF_DAY_MINUTES}m`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="day-type" className="text-sm text-muted-foreground">
+                  {dayType === "full" ? "Full" : "Half"}
+                </Label>
+                <Switch
+                  id="day-type"
+                  checked={dayType === "half"}
+                  onCheckedChange={(checked) => setDayType(checked ? "half" : "full")}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -232,7 +292,12 @@ const Index = () => {
                       {result.isComplete ? "+" : ""}{formatDuration(Math.abs(result.remainingMinutes))}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Target: {TARGET_HOURS}h {TARGET_MINUTES}m
+                      Target: {formatDuration(result.targetMinutes)}
+                      {result.halfType && (
+                        <span className="ml-2 text-accent">
+                          ({result.halfType === "first" ? "First Half" : "Second Half"})
+                        </span>
+                      )}
                     </p>
                   </div>
                 </CardContent>
